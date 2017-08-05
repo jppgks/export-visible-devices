@@ -1,0 +1,33 @@
+#!/bin/sh
+
+# Get treshold from -t option, or use the default value set below if no option provided.
+TRESHOLD=5
+while getopts "t:" OPTION
+do
+  case $OPTION in
+    # -t option found.
+    t)		TRESHOLD="$OPTARG";;
+    # Something is not right.
+    [?])	echo "Usage: $0 [-t treshold]"
+    		exit 1;;
+  esac
+done
+echo "Treshold: $TRESHOLD"
+
+# For each GPU ID in the list of GPU IDs, ...
+for GPU_ID in $(nvidia-smi -L | cut -f 2 -d ' ' | sed 's/.$//')
+do
+  # ...get the amount of memory in use (in MB), and: ...
+  MEMORY_IN_USE=$(nvidia-smi -q --display=MEMORY -i $GPU_ID | cut -f 2 -d ':' | sed -n 11p | cut -f 2 -d ' ')
+  echo "Memory in use for GPU $GPU_ID: $MEMORY_IN_USE"
+  # ...if the memory usage is lower than the given treshold, ...
+  if [ "$MEMORY_IN_USE" -lt "$TRESHOLD" ]
+  then
+    # ...add the ID of this GPU to the environment variable, ...
+    export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES}${CUDA_VISIBLE_DEVICES:+","}$GPU_ID"  # (the "+" in this expression is a check for existence)
+    echo "Added GPU $GPU_ID to CUDA_VISIBLE_DEVICES."
+  else
+    # ...else, log message and continue.
+    echo "GPU $GPU_ID is in use. It was not added to CUDA_VISIBLE_DEVICES."
+  fi
+done
